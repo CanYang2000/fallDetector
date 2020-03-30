@@ -1,0 +1,1 @@
+需要到yolo官网下载yolov3.weights到当前根目录下
