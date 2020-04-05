@@ -5,39 +5,85 @@
 import cv2
 import numpy as np
 import time
+import threading
+
+
+
+
+
+# isFall线程函数，不断使用personBox变量来判断
+#判断单人版本
+def isFall():
+    global  personBox
+    global frame_number
+    time.sleep(1)   #睡一秒
+    print("跌倒检测线程已启动")
+    x,y,w,h = personBox
+    right = x+w
+    bottom = y+h
+    centerY = y+h/2
+    centerX = x+w/2
+    start = time.clock()  # 获取时间间隔
+    Area_start = float((right - centerX) * (bottom - centerY))  # 获取变化的面积
+    thresh_start = 1.37 * (right - centerX)  # VT一般在1.21m/s-2.05m/s   1.37为竖直方向变化速度
+
+    while True:
+        #print('framenumber:', str(frame_number))
+        time.sleep(0.1)
+        if time.clock() - start >= 0.5:#每差不多半秒出一点秒进行判断
+            #记录时间
+            now = time.clock()
+            frame_number = 0
+            #获取最新的人物框架的xywh，即为当前
+            x, y, w, h = personBox
+            right = x + w
+            bottom = y + h
+            centerY = y + h / 2
+            centerX = x + w / 2
+
+            thresh = thresh_start
+            Area_now = float((right - centerX) * (bottom - centerY))
+            print("now",str(now),"|start",str(start))
+            print("Area_now",str(Area_now),"|Area_start",str(Area_start))
+            SpineV = float(1000 * (Area_now - Area_start) / (now - start))  # 求得当前速度
+            print('SpineV: '+str(SpineV)+'|'+'thresh: '+str(thresh))
+
+            if(SpineV > thresh):  # 当前速度和阈值作比较
+                print('人体重心下移的速度为 ' ,SpineV ,'m/s')
+
+            #再次获取最新的人物框架的xywh，即为下次初值
+            x, y, w, h = personBox
+            right = x + w
+            bottom = y + h
+            centerY = y + h / 2
+            centerX = x + w / 2
+            start = time.clock()  # 获取时间间隔
+            Area_start = float((right - centerX) * (bottom - centerY))  # 获取变化的面积
+            thresh_start = 1.37 * (right - centerX)  # VT一般在1.21m/s-2.05m/s   1.37为竖直方向变化速
 
 fallStatus = False
+personBox = [0,0,0,0]#单人
 frame_number = 0
 
-# centerX, centerY为中点坐标, (right, bottom)为右下角(x, y)
-def isFall(centerX ,centerY ,right ,bottom):
-    global frame_number
-    start = time.clock()  # 获取时间间隔
-    Area_start = float((right - centerX) * (centerY - bottom))  # 获取变化的面积
-    thresh = 1.37 * (right - centerX)  # VT一般在1.21m/s-2.05m/s   1.37为竖直方向变化速度
-    print('framenumber:',str(frame_number))
-    if frame_number % 10 == 1:
-        now = time.clock()
-        Area_now = float((right - centerX) * (centerY - bottom))
-        SpineV = float(1000 * (Area_now - Area_start) / (now - start))  # 求得当前速度
-        print('SpineV: '+str(SpineV)+'|'+'thresh: '+str(thresh))
-        if(SpineV > thresh):  # 当前速度和阈值作比较
-            print('人体重心下移的速度为 ' ,SpineV ,'m/s')
-            return True
-        else:
-            return False
 
 # load yolo
 net = cv2.dnn.readNet("yolov3.weights", "yolov3.cfg")
 classes = []
 with open("coco.names", "r") as f:
     classes = [line.strip() for line in f.readlines()]
+
 layers_names = net.getLayerNames()
 output_layers = [layers_names[i[0] - 1] for i in net.getUnconnectedOutLayers()]
 colors = np.random.uniform(0, 255, size=(len(classes),3))
 
 #loading image
 cap = cv2.VideoCapture(0)
+print("摄像头启动")
+
+print("准备启动跌倒检测线程")
+t1 = threading.Thread(target=isFall)
+t1.start()
+
 
 while True:
     frame_number += 1
@@ -93,8 +139,8 @@ while True:
             cv2.putText(frame, label, (x, y+30), font, 2,color,3)
 
             # 当为人的时候调用isFall
-            if label == 'person':
-                fallStatus = isFall(center_x, center_y, x + w, x + h)
+            if label == 'person':#判断多人时，此处应该为append
+                personBox = boxes[i]
 
 
 
